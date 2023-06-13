@@ -26,6 +26,7 @@ from ..utils.autocast import TorchAutocast
 MelodyList = tp.List[tp.Optional[torch.Tensor]]
 MelodyType = tp.Union[torch.Tensor, MelodyList]
 
+ALWAYS_PROGRESS = True
 
 class MusicGen:
     """MusicGen main model with convenient generation API.
@@ -37,7 +38,7 @@ class MusicGen:
         lm (LMModel): Language model over discrete representations.
     """
     def __init__(self, name: str, compression_model: CompressionModel, lm: LMModel,
-                 max_duration: float = 30):
+                 max_duration: float = 600):
         self.name = name
         self.compression_model = compression_model
         self.lm = lm
@@ -298,7 +299,7 @@ class MusicGen:
                 "Prompt is longer than audio to generate"
 
         callback = None
-        if progress:
+        if progress or ALWAYS_PROGRESS:
             callback = _progress_callback
 
         if self.duration <= self.max_duration:
