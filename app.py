@@ -67,7 +67,7 @@ def load_model(version='melody'):
         MODEL = MusicGen.get_pretrained(version)
 
 
-def _do_predictions(texts, melodies, duration, progress=False, **gen_kwargs):
+def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwargs):
     MODEL.set_generation_params(duration=duration, **gen_kwargs)
     print("new batch", len(texts), texts, [None if m is None else (m[0], m[1].shape) for m in melodies])
     be = time.time()
@@ -86,14 +86,14 @@ def _do_predictions(texts, melodies, duration, progress=False, **gen_kwargs):
             processed_melodies.append(melody)
 
     if any(m is not None for m in processed_melodies):
-        outputs = MODEL.generate_with_chroma(
+        outputs = getattr(MODEL, method)(
             descriptions=texts,
             melody_wavs=processed_melodies,
             melody_sample_rate=target_sr,
             progress=progress,
         )
     else:
-        outputs = MODEL.generate(texts, progress=progress)
+        outputs = getattr(MODEL, method)(texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
@@ -116,7 +116,7 @@ def predict_batched(texts, melodies):
     return [res]
 
 
-def predict_full(model, text, melody, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
+def predict_full(model, text, melody, method, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
     global INTERRUPTING
     INTERRUPTING = False
     if temperature < 0:
@@ -136,7 +136,7 @@ def predict_full(model, text, melody, duration, topk, topp, temperature, cfg_coe
     MODEL.set_custom_progress_callback(_progress)
 
     outs = _do_predictions(
-        [text], [melody], duration, progress=True,
+        [text], [melody], duration, method, progress=True,
         top_k=topk, top_p=topp, temperature=temperature, cfg_coef=cfg_coef)
     return outs[0]
 
@@ -156,7 +156,11 @@ def ui_full(launch_kwargs):
                     text = gr.Text(label="Input Text", interactive=True)
                     melody = gr.Audio(source="upload", type="numpy", label="Melody Condition (optional)", interactive=True)
                 with gr.Row():
-                    submit = gr.Button("Submit")
+                    text_generate = gr.Button("Generate (text)")
+                    unconditional_generate = gr.Button('Unconditional (nada)')
+                    chroma_generate = gr.Button('Chroma (text & melody)')
+                with gr.Row():
+                    continuation_generate = gr.Button('Continuation (music/melody)')
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
                     _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
                 with gr.Row():
@@ -170,7 +174,11 @@ def ui_full(launch_kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict_full, inputs=[model, text, melody, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        text_generate.click(predict_full, inputs=[model, text, melody, 'generate', duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        unconditional_generate.click(predict_full, inputs=[model, text, melody, 'generate_unconditional', duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        chroma_generate.click(predict_full, inputs=[model, text, melody, 'generate_with_chroma', duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        continuation_generate.click(predict_full, inputs=[model, text, melody, 'generate_continuation', duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        
         gr.Examples(
             fn=predict_full,
             examples=[
