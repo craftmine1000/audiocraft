@@ -85,15 +85,20 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
             melody = convert_audio(melody, sr, target_sr, target_ac)
             processed_melodies.append(melody)
 
-    if any(m is not None for m in processed_melodies):
-        outputs = getattr(MODEL, method)(
-            descriptions=texts,
-            melody_wavs=processed_melodies,
-            melody_sample_rate=target_sr,
-            progress=progress,
-        )
-    else:
+    if method == 'generate_with_chroma':
+        if any(m is not None for m in processed_melodies):
+            outputs = getattr(MODEL, method)(
+                descriptions=texts,
+                melody_wavs=processed_melodies,
+                melody_sample_rate=target_sr,
+                progress=progress,
+            )
+    elif method == 'generate':
         outputs = getattr(MODEL, method)(texts, progress=progress)
+    elif method == 'generate_unconditional':
+        outputs = getattr(MODEL, method)(1, progress=progress)
+    elif method == 'generate_continuation':
+        outputs = getattr(MODEL, method)(processed_melodies, target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
