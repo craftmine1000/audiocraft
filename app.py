@@ -156,11 +156,11 @@ def ui_full(launch_kwargs):
                     text = gr.Text(label="Input Text", interactive=True)
                     melody = gr.Audio(source="upload", type="numpy", label="Melody Condition (optional)", interactive=True)
                 with gr.Row():
-                    text_generate = gr.Button("Generate (text)")
-                    unconditional_generate = gr.Button('Unconditional (nada)')
-                    chroma_generate = gr.Button('Chroma (text & melody)')
+                    text_generate = gr.Button("generate")
+                    unconditional_generate = gr.Button('generate_unconditional')
+                    chroma_generate = gr.Button('generate_with_chroma')
                 with gr.Row():
-                    continuation_generate = gr.Button('Continuation (music/melody)')
+                    continuation_generate = gr.Button('generate_continuation')
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
                     _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
                 with gr.Row():
@@ -174,10 +174,10 @@ def ui_full(launch_kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        text_generate.click(predict_full, inputs=[model, text, melody, 'generate', duration, topk, topp, temperature, cfg_coef], outputs=[output])
-        unconditional_generate.click(predict_full, inputs=[model, text, melody, 'generate_unconditional', duration, topk, topp, temperature, cfg_coef], outputs=[output])
-        chroma_generate.click(predict_full, inputs=[model, text, melody, 'generate_with_chroma', duration, topk, topp, temperature, cfg_coef], outputs=[output])
-        continuation_generate.click(predict_full, inputs=[model, text, melody, 'generate_continuation', duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        text_generate.click(predict_full, inputs=[model, text, melody, text_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        unconditional_generate.click(predict_full, inputs=[model, text, melody, unconditional_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        chroma_generate.click(predict_full, inputs=[model, text, melody, chroma_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        continuation_generate.click(predict_full, inputs=[model, text, melody, continuation_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
         gr.Examples(
             fn=predict_full,
