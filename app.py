@@ -170,7 +170,7 @@ def ui_full(launch_kwargs):
                         * generate - generate from text prompt
                         * generate_unconditional - generate from nothing
                         * generate_with_chroma - generate from text prompt with melody condition from the audio prompt
-                        * generate_continuation - generate by continuing the audio prompt
+                        * generate_continuation - generate from text prompt by continuing the audio prompt
                         """
                     )
                 with gr.Row():
