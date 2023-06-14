@@ -225,7 +225,7 @@ def ui_full(launch_kwargs):
                     "medium",
                 ],
             ],
-            inputs=[text, melody, model],
+            inputs=[text, melody, method, model],
             outputs=[output]
         )
         gr.Markdown(
