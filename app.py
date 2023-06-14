@@ -158,14 +158,22 @@ def ui_full(launch_kwargs):
         with gr.Row():
             with gr.Column():
                 with gr.Row():
-                    text = gr.Text(label="Text Prompt (optional)", interactive=True)
-                    melody = gr.Audio(source="upload", type="numpy", label="Audio Prompt (optional)", interactive=True)
+                    text = gr.Text(label="Text Prompt", interactive=True)
+                    melody = gr.Audio(source="upload", type="numpy", label="Audio Prompt", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
                     _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
                 with gr.Row():
                     method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation"], label="Generation Method", value="generate", interactive=True)
+                    gr.Markdown(
+                        """
+                        * generate - generate from text prompt
+                        * generate_unconditional - generate from nothing
+                        * generate_with_chroma - generate from text prompt with melody condition from the audio prompt
+                        * generate_continuation - generate by continuing the audio prompt
+                        """
+                    )
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
