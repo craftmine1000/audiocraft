@@ -82,7 +82,9 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
             if melody.dim() == 1:
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
+            print(melody.shape, torch.max(torch.abs(melody)))
             melody = convert_audio(melody, sr, target_sr, target_ac)
+            print(melody.shape, torch.max(torch.abs(melody)))
             processed_melodies.append(melody)
 
     if method == 'generate_with_chroma':
