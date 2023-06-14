@@ -98,7 +98,7 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
     elif method == 'generate_unconditional':
         outputs = getattr(MODEL, method)(1, progress=progress)
     elif method == 'generate_continuation':
-        outputs = getattr(MODEL, method)(torch.stack(processed_melodies, dim=0), target_sr, texts, progress=progress)
+        outputs = getattr(MODEL, method)(processed_melodies[0], target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
