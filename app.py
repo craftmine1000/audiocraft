@@ -158,16 +158,14 @@ def ui_full(launch_kwargs):
         with gr.Row():
             with gr.Column():
                 with gr.Row():
-                    text = gr.Text(label="Input Text", interactive=True)
-                    melody = gr.Audio(source="upload", type="numpy", label="Melody Condition (optional)", interactive=True)
+                    text = gr.Text(label="Text Prompt (optional)", interactive=True)
+                    melody = gr.Audio(source="upload", type="numpy", label="Audio Prompt (optional)", interactive=True)
                 with gr.Row():
-                    text_generate = gr.Button("generate")
-                    unconditional_generate = gr.Button('generate_unconditional')
-                    chroma_generate = gr.Button('generate_with_chroma')
-                with gr.Row():
-                    continuation_generate = gr.Button('generate_continuation')
+                    submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
                     _ = gr.Button("Interrupt").click(fn=interrupt, queue=False)
+                with gr.Row():
+                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation"], label="Generation Method", value="generate", interactive=True)
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
@@ -179,37 +177,51 @@ def ui_full(launch_kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        text_generate.click(predict_full, inputs=[model, text, melody, text_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
-        unconditional_generate.click(predict_full, inputs=[model, text, melody, unconditional_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
-        chroma_generate.click(predict_full, inputs=[model, text, melody, chroma_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
-        continuation_generate.click(predict_full, inputs=[model, text, melody, continuation_generate, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict_full, inputs=[model, text, melody, method, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
         gr.Examples(
             fn=predict_full,
             examples=[
                 [
+                    "",
+                    None,
+                    "generate_unconditional",
+                    "medium",
+                ],
+                [
+                    "An 80s bach movement turning into a pop song with heavy drums and synth pads in the background",
+                    "./assets/bach.mp3",
+                    "generate_continuation",
+                    "medium",
+                ],
+                [
                     "An 80s driving pop song with heavy drums and synth pads in the background",
                     "./assets/bach.mp3",
-                    "melody"
+                    "generate_with_chroma",
+                    "melody",
                 ],
                 [
                     "A cheerful country song with acoustic guitars",
                     "./assets/bolero_ravel.mp3",
-                    "melody"
+                    "generate_with_chroma",
+                    "melody",
                 ],
                 [
                     "90s rock song with electric guitar and heavy drums",
                     None,
-                    "medium"
+                    "generate",
+                    "medium",
                 ],
                 [
                     "a light and cheerly EDM track, with syncopated drums, aery pads, and strong emotions",
                     "./assets/bach.mp3",
-                    "melody"
+                    "generate_with_chroma",
+                    "melody",
                 ],
                 [
                     "lofi slow bpm electro chill with organic samples",
                     None,
+                    "generate",
                     "medium",
                 ],
             ],
