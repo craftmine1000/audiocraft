@@ -67,7 +67,7 @@ def load_model(version='melody'):
         MODEL = MusicGen.get_pretrained(version)
 
 
-def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwargs):
+def _do_predictions(texts, melodies, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
     MODEL.set_generation_params(duration=duration, **gen_kwargs)
     print("new batch", len(texts), texts, [None if m is None else (m[0], m[1].shape) for m in melodies])
     be = time.time()
@@ -85,6 +85,9 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
             melody = convert_audio(melody, sr, target_sr, target_ac)
             processed_melodies.append(melody  / 32768.0)
 
+    if not random_seed:
+        torch.manual_seed(seed)
+
     if method == 'generate_with_chroma':
         if any(m is not None for m in processed_melodies):
             outputs = getattr(MODEL, method)(
@@ -96,7 +99,7 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
     elif method == 'generate':
         outputs = getattr(MODEL, method)(texts, progress=progress)
     elif method == 'generate_unconditional':
-        outputs = getattr(MODEL, method)(1, progress=progress)
+        outputs = getattr(MODEL, method)(n_samples, progress=progress)
     elif method == 'generate_continuation':
         outputs = getattr(MODEL, method)(torch.stack(processed_melodies, dim=0), target_sr, texts, progress=progress)
 
@@ -121,7 +124,7 @@ def predict_batched(texts, melodies):
     return [res]
 
 
-def predict_full(model, text, melody, method, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
+def predict_full(model, text, melody, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
     global INTERRUPTING
     INTERRUPTING = False
     if temperature < 0:
@@ -141,7 +144,7 @@ def predict_full(model, text, melody, method, duration, topk, topp, temperature,
     MODEL.set_custom_progress_callback(_progress)
 
     outs = _do_predictions(
-        [text], [melody], duration, method, progress=True,
+        [text], [melody], duration, method, random_seed, seed, n_samples, progress=True,
         top_k=topk, top_p=topp, temperature=temperature, cfg_coef=cfg_coef)
     return outs[0]
 
@@ -180,13 +183,18 @@ def ui_full(launch_kwargs):
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=600, value=10, label="Duration", interactive=True)
                 with gr.Row():
+                    random_seed = gr.Checkbox(label="Random Seed", value=True, interactive=True)
+                    seed = gr.Number(label="Seed", interactive=True)
+                with gr.Row():
+                    n_samples = gr.Number(label="Number Of Samples (generate_unconditional only)", value=1, interactive=True)
+                with gr.Row():
                     topk = gr.Number(label="Top-k", value=250, interactive=True)
                     topp = gr.Number(label="Top-p", value=0, interactive=True)
                     temperature = gr.Number(label="Temperature", value=1.0, interactive=True)
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict_full, inputs=[model, text, melody, method, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict_full, inputs=[model, text, melody, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
         gr.Examples(
             fn=predict_full,
