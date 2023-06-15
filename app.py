@@ -99,7 +99,7 @@ def _do_predictions(texts, melodies, duration, method, random_seed, seed, n_samp
     elif method == 'generate':
         outputs = getattr(MODEL, method)(texts, progress=progress)
     elif method == 'generate_unconditional':
-        outputs = getattr(MODEL, method)(n_samples, progress=progress)
+        outputs = getattr(MODEL, method)(int(n_samples), progress=progress)
     elif method == 'generate_continuation':
         outputs = getattr(MODEL, method)(torch.stack(processed_melodies, dim=0), target_sr, texts, progress=progress)
 
