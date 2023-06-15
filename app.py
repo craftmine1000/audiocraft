@@ -82,10 +82,8 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
             if melody.dim() == 1:
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
-            print(melody.shape, torch.max(torch.abs(melody)))
             melody = convert_audio(melody, sr, target_sr, target_ac)
-            print(melody.shape, torch.max(torch.abs(melody)))
-            processed_melodies.append(melody)
+            processed_melodies.append(melody  / 32768.0)
 
     if method == 'generate_with_chroma':
         if any(m is not None for m in processed_melodies):
@@ -100,7 +98,7 @@ def _do_predictions(texts, melodies, duration, method, progress=False, **gen_kwa
     elif method == 'generate_unconditional':
         outputs = getattr(MODEL, method)(1, progress=progress)
     elif method == 'generate_continuation':
-        outputs = getattr(MODEL, method)(processed_melodies[0] / 32768.0, target_sr, texts, progress=progress)
+        outputs = getattr(MODEL, method)(torch.stack(processed_melodies, dim=0), target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
