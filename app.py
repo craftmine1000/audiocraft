@@ -67,11 +67,12 @@ def load_model(version='melody'):
         MODEL = MusicGen.get_pretrained(version)
 
 
-def _do_predictions(texts, melodies, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
+def _do_predictions(texts, melodies, audios, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
     MODEL.set_generation_params(duration=duration, **gen_kwargs)
     print("new batch", len(texts), texts, [None if m is None else (m[0], m[1].shape) for m in melodies])
     be = time.time()
     processed_melodies = []
+    processed_audios = []
     target_sr = 32000
     target_ac = 1
     for melody in melodies:
@@ -84,6 +85,17 @@ def _do_predictions(texts, melodies, duration, method, random_seed, seed, n_samp
             melody = melody[..., :int(sr * duration)]
             melody = convert_audio(melody, sr, target_sr, target_ac)
             processed_melodies.append(melody  / 32768.0)
+
+    for audio in audios:
+        if audio is None:
+            processed_audios.append(None)
+        else:
+            sr, audio = audio[0], torch.from_numpy(audio[1]).to(MODEL.device).float().t()
+            if audio.dim() == 1:
+                audio = audio[None]
+            audio = audio[..., :int(sr * duration)]
+            audio = convert_audio(audio, sr, target_sr, target_ac)
+            processed_audios.append(audio  / 32768.0)
 
     if not random_seed:
         torch.manual_seed(seed)
@@ -101,7 +113,9 @@ def _do_predictions(texts, melodies, duration, method, random_seed, seed, n_samp
     elif method == 'generate_unconditional':
         outputs = getattr(MODEL, method)(int(n_samples), progress=progress)
     elif method == 'generate_continuation':
-        outputs = getattr(MODEL, method)(torch.stack(processed_melodies, dim=0), target_sr, texts, progress=progress)
+        outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
+    elif method == 'generate_continuation_with_chroma':
+        outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
@@ -124,7 +138,7 @@ def predict_batched(texts, melodies):
     return [res]
 
 
-def predict_full(model, text, melody, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
+def predict_full(model, text, melody, audio, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
     global INTERRUPTING
     INTERRUPTING = False
     if temperature < 0:
@@ -144,7 +158,7 @@ def predict_full(model, text, melody, method, random_seed, seed, n_samples, dura
     MODEL.set_custom_progress_callback(_progress)
 
     outs = _do_predictions(
-        [text], [melody], duration, method, random_seed, seed, n_samples, progress=True,
+        [text], [melody], [audio], duration, method, random_seed, seed, n_samples, progress=True,
         top_k=topk, top_p=topp, temperature=temperature, cfg_coef=cfg_coef)
     return outs[0]
 
@@ -162,7 +176,9 @@ def ui_full(launch_kwargs):
             with gr.Column():
                 with gr.Row():
                     text = gr.Text(label="Text Prompt", interactive=True)
-                    melody = gr.Audio(source="upload", type="numpy", label="Audio Prompt", interactive=True)
+                with gr.Row():
+                    melody = gr.Audio(source="upload", type="numpy", label="Melody Prompt", interactive=True)
+                    audio = gr.Audio(source="upload", type="numpy", label="Audio Prompt", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
@@ -172,12 +188,13 @@ def ui_full(launch_kwargs):
                         """
                         * generate - generate from text prompt
                         * generate_unconditional - generate from nothing
-                        * generate_with_chroma - generate from text prompt with melody condition from the audio prompt
+                        * generate_with_chroma - generate from text prompt with melody condition from the melody prompt
                         * generate_continuation - generate from text prompt by continuing the audio prompt
+                        * generate_continuation_with_chroma - generate from text prompt with melody condition from the melody prompt by continuing the audio prompt
                         """
                     )
                 with gr.Row():
-                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation"], label="Generation Method", value="generate", interactive=True)
+                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation", "generate_continuation_with_chroma"], label="Generation Method", value="generate", interactive=True)
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
@@ -194,7 +211,7 @@ def ui_full(launch_kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict_full, inputs=[model, text, melody, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict_full, inputs=[model, text, melody, audio, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
         gr.Examples(
             fn=predict_full,
