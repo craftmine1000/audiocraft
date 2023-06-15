@@ -218,8 +218,8 @@ class MusicGen:
         return self._generate_tokens(attributes, prompt_tokens, progress)
 
     def generate_continuation_with_chroma(self, prompt: torch.Tensor, prompt_sample_rate: int,
-                              descriptions: tp.Optional[tp.List[tp.Optional[str]]] = None,
                               melody_wavs: MelodyType, melody_sample_rate: int,
+                              descriptions: tp.Optional[tp.List[tp.Optional[str]]] = None,
                               progress: bool = False) -> torch.Tensor:
         if prompt.dim() == 2:
             prompt = prompt[None]
