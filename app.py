@@ -206,10 +206,10 @@ def ui_full(launch_kwargs):
                     "medium",
                 ],
                 [
-                    "An 80s bach movement turning into a pop song with heavy drums and synth pads in the background",
+                    "A bach movement turning into an 80s pop song with heavy drums and synth pads in the background",
                     "./assets/bach.mp3",
                     "generate_continuation",
-                    "medium",
+                    "melody",
                 ],
                 [
                     "An 80s driving pop song with heavy drums and synth pads in the background",
