@@ -398,7 +398,7 @@ class MusicGen:
             # generate by sampling from LM, simple case.
             token_chunks = []
             for i in range(0, len(attributes), self.batch_size):
-                if prompt_tokens:
+                if prompt_tokens is not None:
                     p_chunk = prompt_tokens[i : i + self.batch_size]
                 else:
                     p_chunk = None
@@ -443,7 +443,7 @@ class MusicGen:
                         torch.full_like(ref_wav[1], wav_target_length))
                 token_chunks = []
                 for i in range(0, len(attributes), self.batch_size):
-                    if prompt_tokens:
+                    if prompt_tokens is not None:
                         p_chunk = prompt_tokens[i : i + self.batch_size]
                     else:
                         p_chunk = None
