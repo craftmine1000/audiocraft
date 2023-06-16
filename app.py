@@ -116,6 +116,8 @@ def _do_predictions(texts, melodies, audios, duration, method, random_seed, seed
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
     elif method == 'generate_continuation_with_chroma':
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
+    elif method == 'generate_continuation_continuous':
+        outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
@@ -191,10 +193,11 @@ def ui_full(launch_kwargs):
                         * generate_with_chroma - generate from text prompt with melody condition from the melody prompt
                         * generate_continuation - generate from text prompt by continuing the audio prompt
                         * generate_continuation_with_chroma - generate from text prompt with melody condition from the melody prompt by continuing the audio prompt
+                        * generate_continuation_continuous - generate from text prompt by continuing the audio prompt continuously
                         """
                     )
                 with gr.Row():
-                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation", "generate_continuation_with_chroma"], label="Generation Method", value="generate", interactive=True)
+                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation", "generate_continuation_with_chroma", "generate_continuation_continuous"], label="Generation Method", value="generate", interactive=True)
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
