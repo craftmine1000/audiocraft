@@ -279,7 +279,7 @@ class MusicGen:
 
         re_prompt_sample_rate = int(self.re_prompt_rate * self.sample_rate)
 
-        padding = re_prompt_sample_rate - ((len(prompt) - 1) % re_prompt_sample_rate ) + 1
+        padding = re_prompt_sample_rate - ((len(prompt) + 1) % re_prompt_sample_rate ) - 1
         print(self.re_prompt_rate, re_prompt_sample_rate, padding)
         print(prompt.shape)
         prompt = torch.nn.functional.pad(input=prompt, pad=(0, 0, 0, 0, 0, padding), mode='constant', value=0)
