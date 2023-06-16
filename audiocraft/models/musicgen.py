@@ -106,7 +106,8 @@ class MusicGen:
     def set_generation_params(self, use_sampling: bool = True, top_k: int = 250,
                               top_p: float = 0.0, temperature: float = 1.0,
                               duration: float = 30.0, cfg_coef: float = 3.0,
-                              two_step_cfg: bool = False, extend_stride: float = 18):
+                              two_step_cfg: bool = False, extend_stride: float = 18,
+                              re_prompt_rate: float = 1):
         """Set the generation parameters for MusicGen.
 
         Args:
@@ -126,6 +127,7 @@ class MusicGen:
         assert extend_stride < self.max_duration, "Cannot stride by more than max generation duration."
         self.extend_stride = extend_stride
         self.duration = duration
+        self.re_prompt_rate = re_prompt_rate
         self.generation_params = {
             'use_sampling': use_sampling,
             'temp': temperature,
@@ -251,6 +253,50 @@ class MusicGen:
         assert prompt_tokens is not None
 
         return self._generate_tokens(attributes, prompt_tokens, progress)
+
+    def generate_continuation_continuous(self, prompt: torch.Tensor, prompt_sample_rate: int,
+                              descriptions: tp.Optional[tp.List[tp.Optional[str]]] = None,
+                              progress: bool = False) -> torch.Tensor:
+        """Generate samples conditioned on audio prompts.
+
+        Args:
+            prompt (torch.Tensor): A batch of waveforms used for continuation.
+                Prompt should be [B, C, T], or [C, T] if only one sample is generated.
+            prompt_sample_rate (int): Sampling rate of the given audio waveforms.
+            descriptions (tp.List[str], optional): A list of strings used as text conditioning. Defaults to None.
+            progress (bool, optional): Flag to display progress of the generation process. Defaults to False.
+        """
+        if prompt.dim() == 2:
+            prompt = prompt[None]
+        if prompt.dim() != 3:
+            raise ValueError("prompt should have 3 dimensions: [B, C, T] (C = 1).")
+        prompt = convert_audio(prompt, prompt_sample_rate, self.sample_rate, self.audio_channels)
+        if descriptions is None:
+            descriptions = [None] * len(prompt)
+
+        old_duration = self.duration
+        self.duration = self.re_prompt_rate * 2
+
+        re_prompt_sample_rate = int(self.re_prompt_rate * self.sample_rate)
+
+        padding = re_prompt_sample_rate - ((len(prompt) - 1) % re_prompt_sample_rate ) + 1
+        print(self.re_prompt_rate, re_prompt_sample_rate, padding)
+        print(prompt.shape)
+        prompt = torch.nn.functional.pad(input=prompt, pad=(0, 0, 0, 0, 0, padding), mode='constant', value=0)
+        print(prompt.shape)
+        prompt = prompt.reshape(-1, *prompt.shape[1:-1], re_prompt_sample_rate)
+        print(prompt.shape)
+
+        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt)
+        assert prompt_tokens is not None
+        tokens = self._generate_tokens(attributes, prompt_tokens, progress)
+        print(tokens.shape)
+        tokens = tokens[:, :, re_prompt_sample_rate:]
+        print(tokens.shape)
+        tokens = tokens.reshape(len(descriptions), *tokens.shape[1:-1], -1)
+        print(tokens.shape)
+        self.duration = old_duration
+        return tokens
 
     @torch.no_grad()
     def _prepare_tokens_and_attributes(
