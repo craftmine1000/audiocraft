@@ -107,7 +107,7 @@ class MusicGen:
                               top_p: float = 0.0, temperature: float = 1.0,
                               duration: float = 30.0, cfg_coef: float = 3.0,
                               two_step_cfg: bool = False, extend_stride: float = 18,
-                              re_prompt_rate: float = 1):
+                              re_prompt_rate: float = 1, batch_size: int = 4):
         """Set the generation parameters for MusicGen.
 
         Args:
@@ -128,6 +128,7 @@ class MusicGen:
         self.extend_stride = extend_stride
         self.duration = duration
         self.re_prompt_rate = re_prompt_rate
+        self.batch_size = batch_size
         self.generation_params = {
             'use_sampling': use_sampling,
             'temp': temperature,
@@ -351,8 +352,12 @@ class MusicGen:
             if descriptions is not None:
                 assert len(descriptions) == len(prompt), "Prompt and nb. descriptions doesn't match"
             prompt = prompt.to(self.device)
-            prompt_tokens, scale = self.compression_model.encode(prompt)
-            assert scale is None
+            prompt_chunks = []
+            for i in range(0, len(prompt), self.batch_size):
+                chunk, scale = self.compression_model.encode(prompt[i : i + self.batch_size])
+                assert scale is None
+                prompt_chunks.append(chunk)
+            prompt_tokens = torch.cat(prompt_chunks)
         else:
             prompt_tokens = None
         return attributes, prompt_tokens
@@ -391,10 +396,18 @@ class MusicGen:
 
         if self.duration <= self.max_duration:
             # generate by sampling from LM, simple case.
-            with self.autocast:
-                gen_tokens = self.lm.generate(
-                    prompt_tokens, attributes,
-                    callback=callback, max_gen_len=total_gen_len, **self.generation_params)
+            token_chunks = []
+            for i in range(0, len(attributes), self.batch_size):
+                if prompt_tokens:
+                    p_chunk = prompt_tokens[i : i + self.batch_size]
+                else:
+                    p_chunk = None
+                with self.autocast:
+                    chunk = self.lm.generate(
+                        p_chunk, attributes[i : i + self.batch_size],
+                        callback=callback, max_gen_len=total_gen_len, **self.generation_params)
+                token_chunks.append(chunk)
+            gen_tokens = torch.cat(token_chunks)
 
         else:
             # now this gets a bit messier, we need to handle prompts,
@@ -428,10 +441,18 @@ class MusicGen:
                     attr.wav['self_wav'] = WavCondition(
                         ref_wav[0][:, positions % wav_length],
                         torch.full_like(ref_wav[1], wav_target_length))
-                with self.autocast:
-                    gen_tokens = self.lm.generate(
-                        prompt_tokens, attributes,
-                        callback=callback, max_gen_len=max_gen_len, **self.generation_params)
+                token_chunks = []
+                for i in range(0, len(attributes), self.batch_size):
+                    if prompt_tokens:
+                        p_chunk = prompt_tokens[i : i + self.batch_size]
+                    else:
+                        p_chunk = None
+                    with self.autocast:
+                        chunk = self.lm.generate(
+                            p_chunk, attributes[i : i + self.batch_size],
+                            callback=callback, max_gen_len=max_gen_len, **self.generation_params)
+                    token_chunks.append(chunk)
+                gen_tokens = torch.cat(token_chunks)
                 if prompt_tokens is None:
                     all_tokens.append(gen_tokens)
                 else:
@@ -444,6 +465,10 @@ class MusicGen:
 
         # generate audio
         assert gen_tokens.dim() == 3
-        with torch.no_grad():
-            gen_audio = self.compression_model.decode(gen_tokens, None)
+        audio_chunks = []
+        for i in range(0, len(gen_tokens), self.batch_size):
+            with torch.no_grad():
+                chunk = self.compression_model.decode(gen_tokens[i : i + self.batch_size], None)
+                audio_chunks.append(chunk)
+        gen_audio = torch.cat(audio_chunks)
         return gen_audio
