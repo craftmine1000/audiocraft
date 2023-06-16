@@ -273,6 +273,7 @@ class MusicGen:
         prompt = convert_audio(prompt, prompt_sample_rate, self.sample_rate, self.audio_channels)
         if descriptions is None:
             descriptions = [None] * len(prompt)
+        old_batch = len(prompt)
 
         old_duration = self.duration
         self.duration = self.re_prompt_rate * 2
@@ -288,13 +289,15 @@ class MusicGen:
         prompt = prompt.reshape(-1, *prompt.shape[1:-1], re_prompt_sample_rate)
         print(prompt.shape)
 
+        descriptions = descriptions * (len(prompt) // old_batch)
+
         attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt)
         assert prompt_tokens is not None
         tokens = self._generate_tokens(attributes, prompt_tokens, progress)
         print(tokens.shape)
         tokens = tokens[:, :, re_prompt_sample_rate:]
         print(tokens.shape)
-        tokens = tokens.reshape(len(descriptions), *tokens.shape[1:-1], -1)
+        tokens = tokens.reshape(old_batch, *tokens.shape[1:-1], -1)
         print(tokens.shape)
         self.duration = old_duration
         return tokens
