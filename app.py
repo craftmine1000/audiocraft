@@ -67,8 +67,8 @@ def load_model(version='melody'):
         MODEL = MusicGen.get_pretrained(version)
 
 
-def _do_predictions(texts, melodies, audios, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
-    MODEL.set_generation_params(duration=duration, **gen_kwargs)
+def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
+    MODEL.set_generation_params(duration=duration, re_prompt_rate=re_prompt, **gen_kwargs)
     print("new batch", len(texts), texts, [None if m is None else (m[0], m[1].shape) for m in melodies])
     be = time.time()
     processed_melodies = []
@@ -140,7 +140,7 @@ def predict_batched(texts, melodies):
     return [res]
 
 
-def predict_full(model, text, melody, audio, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
+def predict_full(model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
     global INTERRUPTING
     INTERRUPTING = False
     if temperature < 0:
@@ -160,7 +160,7 @@ def predict_full(model, text, melody, audio, method, random_seed, seed, n_sample
     MODEL.set_custom_progress_callback(_progress)
 
     outs = _do_predictions(
-        [text], [melody], [audio], duration, method, random_seed, seed, n_samples, progress=True,
+        [text], [melody], [audio], re_prompt, duration, method, random_seed, seed, n_samples, progress=True,
         top_k=topk, top_p=topp, temperature=temperature, cfg_coef=cfg_coef)
     return outs[0]
 
@@ -203,6 +203,8 @@ def ui_full(launch_kwargs):
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=600, value=10, label="Duration", interactive=True)
                 with gr.Row():
+                    re_prompt = gr.Slider(minimum=1, maximum=15, value=10, label="RePrompt Interval", interactive=True)
+                with gr.Row():
                     random_seed = gr.Checkbox(label="Random Seed", value=True, interactive=True)
                     seed = gr.Number(label="Seed", interactive=True)
                 with gr.Row():
@@ -214,7 +216,7 @@ def ui_full(launch_kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
-        submit.click(predict_full, inputs=[model, text, melody, audio, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict_full, inputs=[model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
         gr.Examples(
             fn=predict_full,
