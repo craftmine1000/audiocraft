@@ -287,7 +287,7 @@ class MusicGen:
         #prompt = torch.nn.functional.pad(input=prompt, pad=(0, 0, 0, 0, 0, padding), mode='constant', value=0)
         print(prompt.shape)
         prompt = prompt.reshape(-1, re_prompt_sample_rate)
-        prompt = prompt.reshape(-1, *prompt.shape[1:-1], re_prompt_sample_rate)
+        prompt = prompt.reshape(-1, 1, re_prompt_sample_rate)
         print(prompt.shape)
 
         descriptions = descriptions * (len(prompt) // old_batch)
@@ -299,7 +299,7 @@ class MusicGen:
         tokens = tokens[:, :, re_prompt_sample_rate:]
         print(tokens.shape)
         tokens = tokens.reshape(old_batch, -1)
-        tokens = tokens.reshape(old_batch, *tokens.shape[1:-1], -1)
+        tokens = tokens.reshape(old_batch, 1, -1)
         print(tokens.shape)
         self.duration = old_duration
         return tokens
