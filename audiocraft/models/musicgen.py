@@ -286,7 +286,7 @@ class MusicGen:
         for i in range(0, prompt.shape[-1], re_prompt_stride_sr):
             cut = prompt[:,:,max(0, i - window_length_sr):i]
             missing = window_length_sr - cut.shape[-1]
-            cut = torch.nn.functional.pad(cut, (0,0,0,0, missing,0))
+            cut = torch.nn.functional.pad(cut, (missing, 0))
             new_prompts.append(cut)
         prompt = torch.cat(new_prompts)
         print(prompt.shape)
