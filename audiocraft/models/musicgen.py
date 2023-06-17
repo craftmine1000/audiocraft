@@ -279,13 +279,13 @@ class MusicGen:
         old_duration = self.duration
         self.duration = self.max_duration
 
-        re_prompt_stride_sr = int((self.duration - self.re_prompt_rate) * self.sample_rate)
-        window_length_sr = self.max_duration * self.sample_rate
+        re_prompt_rate_sr = int(self.re_prompt_rate * self.sample_rate)
+        re_prompt_mod_sr = int((self.duration - self.re_prompt_rate) * self.sample_rate)
 
         new_prompts = []
-        for i in range(0, prompt.shape[-1], re_prompt_stride_sr):
-            cut = prompt[:,:,max(0, i - window_length_sr):i]
-            missing = window_length_sr - cut.shape[-1]
+        for i in range(0, prompt.shape[-1], re_prompt_rate_sr):
+            cut = prompt[:,:,max(0, i - re_prompt_mod_sr):i]
+            missing = re_prompt_mod_sr - cut.shape[-1]
             cut = torch.nn.functional.pad(cut, (missing, 0))
             new_prompts.append(cut)
         prompt = torch.cat(new_prompts)
