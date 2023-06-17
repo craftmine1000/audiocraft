@@ -277,29 +277,28 @@ class MusicGen:
         old_batch = len(prompt)
 
         old_duration = self.duration
-        self.duration = self.re_prompt_rate * 2
+        self.duration = self.max_duration
 
-        re_prompt_sample_rate = int(self.re_prompt_rate * self.sample_rate)
+        re_prompt_stride_sr = int((self.duration - self.re_prompt_rate) * self.sample_rate)
+        window_length_sr = self.max_duration * self.sample_rate
 
-        #chunks = ((len(prompt) - 1) // re_prompt_sample_rate) + 1
-        #padding = re_prompt_sample_rate * chunks - len(prompt)
-        #print(self.re_prompt_rate, re_prompt_sample_rate, padding)
-        #print(prompt.shape)
-        #prompt = torch.nn.functional.pad(input=prompt, pad=(0, 0, 0, 0, 0, padding), mode='constant', value=0)
-        print(prompt.shape)
-        prompt = prompt.reshape(-1, re_prompt_sample_rate)
-        prompt = prompt.reshape(-1, 1, re_prompt_sample_rate)
+        new_prompts = []
+        for i in range(0, prompt.shape[-1], re_prompt_stride_sr):
+            cut = prompt[:,:,max(0, i - window_length_sr):i]
+            missing = window_length_sr - cut.shape[-1]
+            cut = torch.nn.functional.pad(cut, (0,0,0,0, missing,0))
+            new_prompts.append(cut)
+        prompt = torch.cat(new_prompts)
         print(prompt.shape)
 
         descriptions = descriptions * (len(prompt) // old_batch)
 
         attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt)
         assert prompt_tokens is not None
-        tokens = self._generate_tokens(attributes, prompt_tokens, progress)
+        tokens = self._generate_tokens(attributes, prompt_tokens, progress, True)
         print(tokens.shape)
-        tokens = tokens[:, :, re_prompt_sample_rate:]
-        print(tokens.shape)
-        tokens = tokens.reshape(old_batch, -1)
+
+        #tokens = tokens.reshape(old_batch, -1)
         tokens = tokens.reshape(old_batch, 1, -1)
         print(tokens.shape)
         self.duration = old_duration
@@ -363,7 +362,8 @@ class MusicGen:
         return attributes, prompt_tokens
 
     def _generate_tokens(self, attributes: tp.List[ConditioningAttributes],
-                         prompt_tokens: tp.Optional[torch.Tensor], progress: bool = False) -> torch.Tensor:
+                         prompt_tokens: tp.Optional[torch.Tensor],
+                         progress: bool = False, remove_prompts: bool = False) -> torch.Tensor:
         """Generate discrete audio tokens given audio prompt and/or conditions.
 
         Args:
@@ -405,7 +405,7 @@ class MusicGen:
                 with self.autocast:
                     chunk = self.lm.generate(
                         p_chunk, attributes[i : i + self.batch_size],
-                        callback=callback, max_gen_len=total_gen_len, **self.generation_params)
+                        callback=callback, max_gen_len=total_gen_len, remove_prompts=remove_prompts, **self.generation_params)
                 token_chunks.append(chunk)
             gen_tokens = torch.cat(token_chunks)
 
@@ -417,7 +417,8 @@ class MusicGen:
             if prompt_tokens is None:
                 prompt_length = 0
             else:
-                all_tokens.append(prompt_tokens)
+                if not remove_prompts:
+                    all_tokens.append(prompt_tokens)
                 prompt_length = prompt_tokens.shape[-1]
 
             stride_tokens = int(self.frame_rate * self.extend_stride)
