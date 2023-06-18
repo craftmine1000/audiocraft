@@ -359,7 +359,7 @@ class MusicGen:
         for melody in melody_wavs:
             tmp_mld = []
             for i in range(0, melody.shape[-1], re_prompt_rate_sr):
-                cut = melody[:,max(0, i - re_prompt_mod_sr):i]
+                cut = melody[:,max(0, i - re_prompt_mod_sr) : i + re_prompt_rate_sr]
                 missing = re_prompt_mod_sr - cut.shape[-1]
                 cut = torch.nn.functional.pad(cut, (missing, 0))
                 new_melodies.append(cut)
