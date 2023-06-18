@@ -118,6 +118,8 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
     elif method == 'generate_continuation_continuous':
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
+    elif method == 'generate_continuation_with_chroma_continuous':
+        outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
@@ -194,19 +196,33 @@ def ui_full(launch_kwargs):
                         * generate_continuation - generate from text prompt by continuing the audio prompt
                         * generate_continuation_with_chroma - generate from text prompt with melody condition from the melody prompt by continuing the audio prompt
                         * generate_continuation_continuous - generate from text prompt by continuing the audio prompt continuously
+                        * generate_continuation_with_chroma_continuous - generate from text prompt with melody conditioning by continuing the audio prompt continuously
                         """
                     )
                 with gr.Row():
-                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation", "generate_continuation_with_chroma", "generate_continuation_continuous"], label="Generation Method", value="generate", interactive=True)
+                    method = gr.Radio(
+                        [
+                            "generate",
+                            "generate_unconditional",
+                            "generate_with_chroma",
+                            "generate_continuation",
+                            "generate_continuation_with_chroma",
+                            "generate_continuation_continuous",
+                            "generate_continuation_with_chroma_continuous",
+                        ],
+                        label="Generation Method",
+                        value="generate",
+                        interactive=True
+                    )
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=600, value=10, label="Duration", interactive=True)
                 with gr.Row():
-                    re_prompt = gr.Slider(minimum=1, maximum=15, value=10, label="RePrompt Interval", interactive=True)
-                with gr.Row():
                     random_seed = gr.Checkbox(label="Random Seed", value=True, interactive=True)
                     seed = gr.Number(label="Seed", interactive=True)
+                with gr.Row():
+                    re_prompt = gr.Slider(minimum=1, maximum=15, value=10, label="RePrompt Interval (continuous modes)", interactive=True)
                 with gr.Row():
                     n_samples = gr.Number(label="Number Of Samples (generate_unconditional only)", value=1, interactive=True)
                 with gr.Row():
