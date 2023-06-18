@@ -107,7 +107,8 @@ class MusicGen:
                               top_p: float = 0.0, temperature: float = 1.0,
                               duration: float = 30.0, cfg_coef: float = 3.0,
                               two_step_cfg: bool = False, extend_stride: float = 18,
-                              re_prompt_rate: float = 1, batch_size: int = 4):
+                              re_prompt_rate: float = 1, batch_size: int = 4,
+                              extra_re_chroma: float = 30):
         """Set the generation parameters for MusicGen.
 
         Args:
@@ -129,6 +130,7 @@ class MusicGen:
         self.duration = duration
         self.re_prompt_rate = re_prompt_rate
         self.batch_size = batch_size
+        self.extra_re_chroma = extra_re_chroma
         self.generation_params = {
             'use_sampling': use_sampling,
             'temp': temperature,
@@ -355,18 +357,23 @@ class MusicGen:
             new_prompts.append(cut)
         prompt = torch.cat(new_prompts)
 
+        extra_re_chroma_sr = int(self.extra_re_chroma * self.sample_rate)
+
         new_melodies = []
         for melody in melody_wavs:
             tmp_mld = []
             for i in range(0, melody.shape[-1], re_prompt_rate_sr):
-                cut = melody[:,max(0, i - re_prompt_mod_sr) : i + re_prompt_rate_sr]
+                cut = melody[:,max(0, i - re_prompt_mod_sr) : i + re_prompt_rate_sr + extra_re_chroma_sr]
                 missing = re_prompt_mod_sr - cut.shape[-1]
                 cut = torch.nn.functional.pad(cut, (missing, 0))
-                new_melodies.append(cut)
+                tmp_mld.append(cut)
+            new_melodies.append(tmp_mld)
+
+        interleaved_melodies = [mel for tup in zip(*new_melodies) for mel in tup]
 
         descriptions = descriptions * (len(prompt) // old_batch)
 
-        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt, new_melodies)
+        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt, interleaved_melodies)
         assert prompt_tokens is not None
         tokens = self._generate_tokens(attributes, prompt_tokens, progress, True)
         print(tokens.shape)
