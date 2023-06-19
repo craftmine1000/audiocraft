@@ -69,7 +69,7 @@ def load_model(version='melody'):
 
 def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
     MODEL.set_generation_params(duration=duration, re_prompt_rate=re_prompt, **gen_kwargs)
-    print("new batch", len(texts), texts, [None if m is None else (m[0], m[1].shape) for m in melodies])
+    print("new batch", len(texts), texts, [None if m is None else m for m in melodies])
     be = time.time()
     processed_melodies = []
     processed_audios = []
