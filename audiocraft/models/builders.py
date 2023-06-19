@@ -33,6 +33,7 @@ from ..modules.conditioners import (
     T5Conditioner,
     ConditionFuser,
     ChromaStemConditioner,
+    RawChromaStemConditioner,
 )
 from .. import quantization as qt
 from ..utils.utils import dict_from_config
@@ -140,7 +141,7 @@ def get_conditioner_provider(output_dim: int, cfg: omegaconf.DictConfig) -> Cond
             conditioners[str(cond)] = LUTConditioner(output_dim=output_dim, **model_args)
         elif model_type == "chroma_stem":
             model_args.pop('cache_path', None)
-            conditioners[str(cond)] = ChromaStemConditioner(
+            conditioners[str(cond)] = RawChromaStemConditioner(
                 output_dim=output_dim,
                 duration=duration,
                 device=device,

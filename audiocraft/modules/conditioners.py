@@ -462,11 +462,8 @@ class WaveformConditioner(BaseConditioner):
 
         return embeds, mask
 
-
-class ChromaStemConditioner(WaveformConditioner):
-    """Chroma conditioner that uses DEMUCS to first filter out drums and bass. The is followed by
-    the insight the drums and bass often dominate the chroma, leading to the chroma not containing the
-    information about melody.
+class RawChromaStemConditioner(WaveformConditioner):
+    """Chroma conditioner that does NOT use DEMUCS
 
     Args:
         output_dim (int): Output dimension for the conditioner.
@@ -493,9 +490,6 @@ class ChromaStemConditioner(WaveformConditioner):
         self.sample_rate = sample_rate
         self.match_len_on_eval = match_len_on_eval
         self.duration = duration
-        self.__dict__["demucs"] = pretrained.get_model('htdemucs').to(device)
-        self.stem2idx = {'drums': 0, 'bass': 1, 'other': 2, 'vocal': 3}
-        self.stem_idx = torch.LongTensor([self.stem2idx['vocal'], self.stem2idx['other']]).to(device)
         self.chroma = ChromaExtractor(sample_rate=sample_rate, n_chroma=n_chroma, radix2_exp=radix2_exp,
                                       device=device, **kwargs)
         self.chroma_len = self._get_chroma_len()
@@ -511,24 +505,15 @@ class ChromaStemConditioner(WaveformConditioner):
 
     @torch.no_grad()
     def _get_filtered_wav(self, wav):
-        from demucs.apply import apply_model
-        from demucs.audio import convert_audio
-        with self.autocast:
-            wav = convert_audio(wav, self.sample_rate, self.demucs.samplerate, self.demucs.audio_channels)
-            stems = apply_model(self.demucs, wav, device=self.device)
-            stems = stems[:, self.stem_idx]  # extract stem
-            stems = stems.sum(1)  # merge extracted stems
-            stems = stems.mean(1, keepdim=True)  # mono
-            stems = convert_audio(stems, self.demucs.samplerate, self.sample_rate, 1)
-            return stems
+        return wav
 
     @torch.no_grad()
     def _get_wav_embedding(self, wav):
         # avoid 0-size tensors when we are working with null conds
         if wav.shape[-1] == 1:
             return self.chroma(wav)
-        stems = self._get_filtered_wav(wav)
-        chroma = self.chroma(stems)
+        wav = self._get_filtered_wav(wav)
+        chroma = self.chroma(wav)
 
         if self.match_len_on_eval:
             b, t, c = chroma.shape
@@ -543,6 +528,50 @@ class ChromaStemConditioner(WaveformConditioner):
                 logger.debug(f'chroma was zero-padded! ({t} -> {chroma.shape[1]})')
         return chroma
 
+class ChromaStemConditioner(RawChromaStemConditioner):
+    """Chroma conditioner that uses DEMUCS to first filter out drums and bass. The is followed by
+    the insight the drums and bass often dominate the chroma, leading to the chroma not containing the
+    information about melody.
+
+    Args:
+        output_dim (int): Output dimension for the conditioner.
+        sample_rate (int): Sample rate for the chroma extractor.
+        n_chroma (int): Number of chroma for the chroma extractor.
+        radix2_exp (int): Radix2 exponent for the chroma extractor.
+        duration (float): Duration used during training. This is later used for correct padding
+            in case we are using chroma as prefix.
+        match_len_on_eval (bool, optional): If True then all chromas are padded to the training
+            duration. Defaults to False.
+        eval_wavs (str, optional): Path to a json egg with waveform, this waveforms are used as
+            conditions during eval (for cases where we don't want to leak test conditions like MusicCaps).
+            Defaults to None.
+        n_eval_wavs (int, optional): Limits the number of waveforms used for conditioning. Defaults to 0.
+        device (tp.Union[torch.device, str], optional): Device for the conditioner.
+        **kwargs: Additional parameters for the chroma extractor.
+    """
+    def __init__(self, output_dim: int, sample_rate: int, n_chroma: int, radix2_exp: int,
+                 duration: float, match_len_on_eval: bool = True, eval_wavs: tp.Optional[str] = None,
+                 n_eval_wavs: int = 0, device: tp.Union[torch.device, str] = "cpu", **kwargs):
+        from demucs import pretrained
+        super().__init__(output_dim, sample_rate, n_chroma, radix2_exp,
+                 duration, match_len_on_eval, eval_wavs,
+                 n_eval_wavs, device, **kwargs)
+        self.__dict__["demucs"] = pretrained.get_model('htdemucs').to(device)
+        self.stem2idx = {'drums': 0, 'bass': 1, 'other': 2, 'vocal': 3}
+        self.stem_idx = torch.LongTensor([self.stem2idx['vocal'], self.stem2idx['other']]).to(device)
+
+    @torch.no_grad()
+    def _get_filtered_wav(self, wav):
+        from demucs.apply import apply_model
+        from demucs.audio import convert_audio
+        with self.autocast:
+            wav = convert_audio(wav, self.sample_rate, self.demucs.samplerate, self.demucs.audio_channels)
+            stems = apply_model(self.demucs, wav, device=self.device)
+            stems = stems[:, self.stem_idx]  # extract stem
+            stems = stems.sum(1)  # merge extracted stems
+            stems = stems.mean(1, keepdim=True)  # mono
+            stems = convert_audio(stems, self.demucs.samplerate, self.sample_rate, 1)
+            return stems
 
 class ChromaExtractor(nn.Module):
     """Chroma extraction class, handles chroma extraction and quantization.
