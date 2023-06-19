@@ -129,7 +129,6 @@ class MusicGen:
         self.duration = duration
         self.re_prompt_rate = re_prompt_rate
         self.batch_size = batch_size
-        self.extra_re_chroma = extra_re_chroma
         self.generation_params = {
             'use_sampling': use_sampling,
             'temp': temperature,
