@@ -16,6 +16,7 @@ import time
 import warnings
 
 import torch
+import torchaudio
 import gradio as gr
 
 from audiocraft.data.audio_utils import convert_audio
@@ -78,25 +79,25 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
         if melody is None:
             processed_melodies.append(None)
         else:
-            sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t()
+            melody, sr = torchaudio.load(melody).to(MODEL.device)
             if melody.dim() == 1:
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
             melody = convert_audio(melody, sr, target_sr, target_ac)
             print(melody.shape, torch.max(torch.abs(melody)))
-            processed_melodies.append(melody  / 32768.0)
+            processed_melodies.append(melody)
 
     for audio in audios:
         if audio is None:
             processed_audios.append(None)
         else:
-            sr, audio = audio[0], torch.from_numpy(audio[1]).to(MODEL.device).float().t()
+            audio, sr = torchaudio.load(audio).to(MODEL.device)
             if audio.dim() == 1:
                 audio = audio[None]
             audio = audio[..., :int(sr * duration)]
             audio = convert_audio(audio, sr, target_sr, target_ac)
             print(audio.shape, torch.max(torch.abs(audio)))
-            processed_audios.append(audio  / 32768.0)
+            processed_audios.append(audio)
 
     if not random_seed:
         torch.manual_seed(seed)
@@ -182,8 +183,8 @@ def ui_full(launch_kwargs):
                 with gr.Row():
                     text = gr.Text(label="Text Prompt", interactive=True)
                 with gr.Row():
-                    melody = gr.Audio(source="upload", type="numpy", label="Melody Prompt", interactive=True)
-                    audio = gr.Audio(source="upload", type="numpy", label="Audio Prompt", interactive=True)
+                    melody = gr.Audio(source="upload", type="filepath", label="Melody Prompt", interactive=True)
+                    audio = gr.Audio(source="upload", type="filepath", label="Audio Prompt", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
