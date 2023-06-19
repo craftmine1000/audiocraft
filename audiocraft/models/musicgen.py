@@ -107,8 +107,7 @@ class MusicGen:
                               top_p: float = 0.0, temperature: float = 1.0,
                               duration: float = 30.0, cfg_coef: float = 3.0,
                               two_step_cfg: bool = False, extend_stride: float = 18,
-                              re_prompt_rate: float = 1, batch_size: int = 4,
-                              extra_re_chroma: float = 30):
+                              re_prompt_rate: float = 1, batch_size: int = 4):
         """Set the generation parameters for MusicGen.
 
         Args:
@@ -356,8 +355,6 @@ class MusicGen:
             cut = torch.nn.functional.pad(cut, (missing, 0))
             new_prompts.append(cut)
         prompt = torch.cat(new_prompts)
-
-        extra_re_chroma_sr = int(self.extra_re_chroma * self.sample_rate)
 
         new_melodies = []
         for melody in melody_wavs:
