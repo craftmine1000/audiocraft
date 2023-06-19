@@ -222,7 +222,7 @@ def ui_full(launch_kwargs):
                     random_seed = gr.Checkbox(label="Random Seed", value=True, interactive=True)
                     seed = gr.Number(label="Seed", interactive=True)
                 with gr.Row():
-                    re_prompt = gr.Slider(minimum=1, maximum=15, value=10, label="RePrompt Interval (continuous modes)", interactive=True)
+                    re_prompt = gr.Slider(minimum=0.02, maximum=20, value=10, label="RePrompt Interval (continuous modes)", interactive=True)
                 with gr.Row():
                     n_samples = gr.Number(label="Number Of Samples (generate_unconditional only)", value=1, interactive=True)
                 with gr.Row():
