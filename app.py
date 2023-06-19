@@ -16,12 +16,12 @@ import time
 import warnings
 
 import torch
+import torchaudio
 import gradio as gr
 
 from audiocraft.data.audio_utils import convert_audio
 from audiocraft.data.audio import audio_write
 from audiocraft.models import MusicGen
-
 
 MODEL = None  # Last used model
 IS_BATCHED = "facebook/MusicGen" in os.environ.get('SPACE_ID', '')
@@ -69,7 +69,7 @@ def load_model(version='melody'):
 
 def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
     MODEL.set_generation_params(duration=duration, re_prompt_rate=re_prompt, **gen_kwargs)
-    print("new batch", len(texts), texts, [None if m is None else (m[0], m[1].shape) for m in melodies])
+    print("new batch", len(texts), texts, [None if m is None else m for m in melodies])
     be = time.time()
     processed_melodies = []
     processed_audios = []
@@ -79,23 +79,27 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
         if melody is None:
             processed_melodies.append(None)
         else:
-            sr, melody = melody[0], torch.from_numpy(melody[1]).to(MODEL.device).float().t()
+            melody, sr = torchaudio.load(melody)
+            melody = melody.to(MODEL.device)
             if melody.dim() == 1:
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
             melody = convert_audio(melody, sr, target_sr, target_ac)
-            processed_melodies.append(melody  / 32768.0)
+            print(melody.shape, torch.max(torch.abs(melody)))
+            processed_melodies.append(melody)
 
     for audio in audios:
         if audio is None:
             processed_audios.append(None)
         else:
-            sr, audio = audio[0], torch.from_numpy(audio[1]).to(MODEL.device).float().t()
+            audio, sr = torchaudio.load(audio)
+            audio = audio.to(MODEL.device)
             if audio.dim() == 1:
                 audio = audio[None]
             audio = audio[..., :int(sr * duration)]
             audio = convert_audio(audio, sr, target_sr, target_ac)
-            processed_audios.append(audio  / 32768.0)
+            print(audio.shape, torch.max(torch.abs(audio)))
+            processed_audios.append(audio)
 
     if not random_seed:
         torch.manual_seed(seed)
@@ -118,6 +122,8 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
     elif method == 'generate_continuation_continuous':
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
+    elif method == 'generate_continuation_with_chroma_continuous':
+        outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
 
     outputs = outputs.detach().cpu().float()
     out_files = []
@@ -179,8 +185,8 @@ def ui_full(launch_kwargs):
                 with gr.Row():
                     text = gr.Text(label="Text Prompt", interactive=True)
                 with gr.Row():
-                    melody = gr.Audio(source="upload", type="numpy", label="Melody Prompt", interactive=True)
-                    audio = gr.Audio(source="upload", type="numpy", label="Audio Prompt", interactive=True)
+                    melody = gr.Audio(source="upload", type="filepath", label="Melody Prompt", interactive=True)
+                    audio = gr.Audio(source="upload", type="filepath", label="Audio Prompt", interactive=True)
                 with gr.Row():
                     submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
@@ -194,19 +200,33 @@ def ui_full(launch_kwargs):
                         * generate_continuation - generate from text prompt by continuing the audio prompt
                         * generate_continuation_with_chroma - generate from text prompt with melody condition from the melody prompt by continuing the audio prompt
                         * generate_continuation_continuous - generate from text prompt by continuing the audio prompt continuously
+                        * generate_continuation_with_chroma_continuous - generate from text prompt with melody conditioning by continuing the audio prompt continuously
                         """
                     )
                 with gr.Row():
-                    method = gr.Radio(["generate", "generate_unconditional", "generate_with_chroma", "generate_continuation", "generate_continuation_with_chroma", "generate_continuation_continuous"], label="Generation Method", value="generate", interactive=True)
+                    method = gr.Radio(
+                        [
+                            "generate",
+                            "generate_unconditional",
+                            "generate_with_chroma",
+                            "generate_continuation",
+                            "generate_continuation_with_chroma",
+                            "generate_continuation_continuous",
+                            "generate_continuation_with_chroma_continuous",
+                        ],
+                        label="Generation Method",
+                        value="generate",
+                        interactive=True
+                    )
                 with gr.Row():
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=600, value=10, label="Duration", interactive=True)
                 with gr.Row():
-                    re_prompt = gr.Slider(minimum=1, maximum=15, value=10, label="RePrompt Interval", interactive=True)
-                with gr.Row():
                     random_seed = gr.Checkbox(label="Random Seed", value=True, interactive=True)
                     seed = gr.Number(label="Seed", interactive=True)
+                with gr.Row():
+                    re_prompt = gr.Slider(minimum=0.02, maximum=20, value=10, label="RePrompt Interval (continuous modes)", interactive=True)
                 with gr.Row():
                     n_samples = gr.Number(label="Number Of Samples (generate_unconditional only)", value=1, interactive=True)
                 with gr.Row():

@@ -129,6 +129,7 @@ class MusicGen:
         self.duration = duration
         self.re_prompt_rate = re_prompt_rate
         self.batch_size = batch_size
+        self.extra_re_chroma = extra_re_chroma
         self.generation_params = {
             'use_sampling': use_sampling,
             'temp': temperature,
@@ -294,6 +295,82 @@ class MusicGen:
         descriptions = descriptions * (len(prompt) // old_batch)
 
         attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt)
+        assert prompt_tokens is not None
+        tokens = self._generate_tokens(attributes, prompt_tokens, progress, True)
+        print(tokens.shape)
+
+        #tokens = tokens.reshape(old_batch, -1)
+        tokens = tokens.reshape(old_batch, 1, -1)
+        print(tokens.shape)
+        self.duration = old_duration
+        return tokens
+
+    def generate_continuation_with_chroma_continuous(self, prompt: torch.Tensor, prompt_sample_rate: int,
+                              melody_wavs: MelodyType, melody_sample_rate: int,
+                              descriptions: tp.Optional[tp.List[tp.Optional[str]]] = None,
+                              progress: bool = False) -> torch.Tensor:
+        """Generate samples conditioned on audio prompts.
+
+        Args:
+            prompt (torch.Tensor): A batch of waveforms used for continuation.
+                Prompt should be [B, C, T], or [C, T] if only one sample is generated.
+            prompt_sample_rate (int): Sampling rate of the given audio waveforms.
+            descriptions (tp.List[str], optional): A list of strings used as text conditioning. Defaults to None.
+            progress (bool, optional): Flag to display progress of the generation process. Defaults to False.
+        """
+        if prompt.dim() == 2:
+            prompt = prompt[None]
+        if prompt.dim() != 3:
+            raise ValueError("prompt should have 3 dimensions: [B, C, T] (C = 1).")
+        prompt = convert_audio(prompt, prompt_sample_rate, self.sample_rate, self.audio_channels)
+        if descriptions is None:
+            descriptions = [None] * len(prompt)
+        old_batch = len(prompt)
+
+        if isinstance(melody_wavs, torch.Tensor):
+            if melody_wavs.dim() == 2:
+                melody_wavs = melody_wavs[None]
+            if melody_wavs.dim() != 3:
+                raise ValueError("Melody wavs should have a shape [B, C, T].")
+            melody_wavs = list(melody_wavs)
+        else:
+            for melody in melody_wavs:
+                if melody is not None:
+                    assert melody.dim() == 2, "One melody in the list has the wrong number of dims."
+        melody_wavs = [
+            convert_audio(wav, melody_sample_rate, self.sample_rate, self.audio_channels)
+            if wav is not None else None
+            for wav in melody_wavs]
+
+        old_duration = self.duration
+        self.duration = self.max_duration
+
+        re_prompt_rate_sr = int(self.re_prompt_rate * self.sample_rate)
+        re_prompt_mod_sr = int((self.duration - self.re_prompt_rate) * self.sample_rate)
+
+        new_prompts = []
+        for i in range(0, prompt.shape[-1], re_prompt_rate_sr):
+            cut = prompt[:,:,max(0, i - re_prompt_mod_sr):i]
+            missing = re_prompt_mod_sr - cut.shape[-1]
+            cut = torch.nn.functional.pad(cut, (missing, 0))
+            new_prompts.append(cut)
+        prompt = torch.cat(new_prompts)
+
+        new_melodies = []
+        for melody in melody_wavs:
+            tmp_mld = []
+            for i in range(0, melody.shape[-1], re_prompt_rate_sr):
+                cut = melody[:, max(0, i - re_prompt_mod_sr) : i + re_prompt_rate_sr]
+                missing = re_prompt_mod_sr - cut.shape[-1]
+                cut = torch.nn.functional.pad(cut, (missing, 0))
+                tmp_mld.append(cut)
+            new_melodies.append(tmp_mld)
+
+        interleaved_melodies = [mel for tup in zip(*new_melodies) for mel in tup]
+
+        descriptions = descriptions * (len(prompt) // old_batch)
+
+        attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, prompt, interleaved_melodies)
         assert prompt_tokens is not None
         tokens = self._generate_tokens(attributes, prompt_tokens, progress, True)
         print(tokens.shape)
