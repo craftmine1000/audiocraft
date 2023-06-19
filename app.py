@@ -79,7 +79,8 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
         if melody is None:
             processed_melodies.append(None)
         else:
-            melody, sr = torchaudio.load(melody).to(MODEL.device)
+            melody, sr = torchaudio.load(melody)
+            melody = melody.to(MODEL.device)
             if melody.dim() == 1:
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
@@ -91,7 +92,8 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
         if audio is None:
             processed_audios.append(None)
         else:
-            audio, sr = torchaudio.load(audio).to(MODEL.device)
+            audio, sr = torchaudio.load(audio)
+            audio = audio.to(MODEL.device)
             if audio.dim() == 1:
                 audio = audio[None]
             audio = audio[..., :int(sr * duration)]
