@@ -22,8 +22,6 @@ from audiocraft.data.audio_utils import convert_audio
 from audiocraft.data.audio import audio_write
 from audiocraft.models import MusicGen
 
-import numpy as np
-
 MODEL = None  # Last used model
 IS_BATCHED = "facebook/MusicGen" in os.environ.get('SPACE_ID', '')
 MAX_BATCH_SIZE = 12
@@ -85,7 +83,7 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
                 melody = melody[None]
             melody = melody[..., :int(sr * duration)]
             melody = convert_audio(melody, sr, target_sr, target_ac)
-            print(melody.shape, np.max(np.abs(melody)))
+            print(melody.shape, torch.max(torch.abs(melody)))
             processed_melodies.append(melody  / 32768.0)
 
     for audio in audios:
@@ -97,7 +95,7 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random
                 audio = audio[None]
             audio = audio[..., :int(sr * duration)]
             audio = convert_audio(audio, sr, target_sr, target_ac)
-            print(audio.shape, np.max(np.abs(audio)))
+            print(audio.shape, torch.max(torch.abs(audio)))
             processed_audios.append(audio  / 32768.0)
 
     if not random_seed:
