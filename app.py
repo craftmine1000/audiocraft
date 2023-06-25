@@ -67,8 +67,8 @@ def load_model(version='melody'):
         MODEL = MusicGen.get_pretrained(version)
 
 
-def _do_predictions(texts, melodies, audios, re_prompt, duration, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
-    MODEL.set_generation_params(duration=duration, re_prompt_rate=re_prompt, **gen_kwargs)
+def _do_predictions(texts, melodies, audios, re_prompt, duration, extra_prompt, prompt_period, gen_period, method, random_seed, seed, n_samples, progress=False, **gen_kwargs):
+    MODEL.set_generation_params(duration=duration, re_prompt_rate=re_prompt, interleaved_extra_prompt=extra_prompt, interleaved_prompt_period=prompt_period, interleaved_gen_period=gen_period, **gen_kwargs)
     print("new batch", len(texts), texts, [None if m is None else m for m in melodies])
     be = time.time()
     processed_melodies = []
@@ -146,7 +146,7 @@ def predict_batched(texts, melodies):
     return [res]
 
 
-def predict_full(model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
+def predict_full(model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, extra_prompt, prompt_period, gen_period, topk, topp, temperature, cfg_coef, progress=gr.Progress()):
     global INTERRUPTING
     INTERRUPTING = False
     if temperature < 0:
@@ -166,7 +166,7 @@ def predict_full(model, text, melody, audio, re_prompt, method, random_seed, see
     MODEL.set_custom_progress_callback(_progress)
 
     outs = _do_predictions(
-        [text], [melody], [audio], re_prompt, duration, method, random_seed, seed, n_samples, progress=True,
+        [text], [melody], [audio], re_prompt, duration, extra_prompt, prompt_period, gen_period, method, random_seed, seed, n_samples, progress=True,
         top_k=topk, top_p=topp, temperature=temperature, cfg_coef=cfg_coef)
     return outs[0]
 
@@ -209,6 +209,7 @@ def ui_full(launch_kwargs):
                         * generate_continuation_with_chroma - generate from text prompt with melody condition from the melody prompt by continuing the audio prompt
                         * generate_continuation_continuous - generate from text prompt by continuing the audio prompt continuously
                         * generate_continuation_with_chroma_continuous - generate from text prompt with melody conditioning by continuing the audio prompt continuously
+                        * generate_continuation_interleaved - generate from text prompt by continuing the audio prompt, prompt and generation get interleaved
                         """
                     )
                 with gr.Row():
@@ -221,6 +222,7 @@ def ui_full(launch_kwargs):
                             "generate_continuation_with_chroma",
                             "generate_continuation_continuous",
                             "generate_continuation_with_chroma_continuous",
+                            "generate_continuation_interleaved",
                         ],
                         label="Generation Method",
                         value="generate",
@@ -230,6 +232,10 @@ def ui_full(launch_kwargs):
                     model = gr.Radio(["melody", "medium", "small", "large"], label="Model", value="melody", interactive=True)
                 with gr.Row():
                     duration = gr.Slider(minimum=1, maximum=600, value=10, label="Duration", interactive=True)
+                with gr.Row():
+                    extra_prompt = gr.Number(label="Extra Prompting", interactive=True)
+                    prompt_period = gr.Number(label="Prompt Period", interactive=True)
+                    gen_period = gr.Number(label="Generation Period", interactive=True)
                 with gr.Row():
                     random_seed = gr.Checkbox(label="Random Seed", value=True, interactive=True)
                     seed = gr.Number(label="Seed", interactive=True)
@@ -245,7 +251,7 @@ def ui_full(launch_kwargs):
             with gr.Column():
                 output = gr.Video(label="Generated Music")
 
-        submit.click(predict_full, inputs=[model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
+        submit.click(predict_full, inputs=[model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, extra_prompt, prompt_period, gen_period, topk, topp, temperature, cfg_coef], outputs=[output])
         
         mic_radio_melody.change(toggle_audio_src, [mic_radio_melody, gr.Text(value="Melody", visible=False, interactive=False)], [melody], queue=False, show_progress=False)
         mic_radio_audio.change(toggle_audio_src, [mic_radio_audio, gr.Text(value="Audio", visible=False, interactive=False)], [audio], queue=False, show_progress=False)
