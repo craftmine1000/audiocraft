@@ -124,6 +124,9 @@ def _do_predictions(texts, melodies, audios, re_prompt, duration, extra_prompt, 
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
     elif method == 'generate_continuation_with_chroma_continuous':
         outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, processed_melodies, target_sr, texts, progress=progress)
+    elif method == 'generate_continuation_interleaved':
+        outputs = getattr(MODEL, method)(torch.stack(processed_audios, dim=0), target_sr, texts, progress=progress)
+
 
     outputs = outputs.detach().cpu().float()
     out_files = []
