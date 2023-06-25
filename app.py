@@ -170,6 +170,11 @@ def predict_full(model, text, melody, audio, re_prompt, method, random_seed, see
         top_k=topk, top_p=topp, temperature=temperature, cfg_coef=cfg_coef)
     return outs[0]
 
+def toggle_audio_src(choice, psfix=""):
+    if choice == "mic":
+        return gr.update(source="microphone", value=None, label="Microphone" + (" " + psfix if len(psfix) else ""))
+    else:
+        return gr.update(source="upload", value=None, label=(psfix + " " if len(psfix) else "") + "File")
 
 def ui_full(launch_kwargs):
     with gr.Blocks() as interface:
@@ -185,8 +190,11 @@ def ui_full(launch_kwargs):
                 with gr.Row():
                     text = gr.Text(label="Text Prompt", interactive=True)
                 with gr.Row():
-                    melody = gr.Audio(source="upload", type="filepath", label="Melody Prompt", interactive=True)
-                    audio = gr.Audio(source="upload", type="filepath", label="Audio Prompt", interactive=True)
+                    melody = gr.Audio(source="upload", type="filepath", label="Melody Prompt", interactive=True, elem_id="melody-input")
+                    audio = gr.Audio(source="upload", type="filepath", label="Audio Prompt", interactive=True, elem_id="audio-input")
+                with gr.Row():
+                    mic_radio_melody = gr.Radio(["file", "mic"], value="file", label="Condition on a melody (optional) File or Mic")
+                    mic_radio_audio = gr.Radio(["file", "mic"], value="file", label="Prompt on audio (optional) File or Mic")
                 with gr.Row():
                     submit = gr.Button("Submit")
                     # Adapted from https://github.com/rkfg/audiocraft/blob/long/app.py, MIT license.
@@ -236,8 +244,12 @@ def ui_full(launch_kwargs):
                     cfg_coef = gr.Number(label="Classifier Free Guidance", value=3.0, interactive=True)
             with gr.Column():
                 output = gr.Video(label="Generated Music")
+
         submit.click(predict_full, inputs=[model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
+        mic_radio_melody.change(toggle_audio_src, [mic_radio_melody, "Melody"], [melody], queue=False, show_progress=False)
+        mic_radio_audio.change(toggle_audio_src, [mic_radio_audio, "Audio"], [audio], queue=False, show_progress=False)
+
         gr.Examples(
             fn=predict_full,
             examples=[
@@ -336,12 +348,15 @@ def ui_batched(launch_kwargs):
             with gr.Column():
                 with gr.Row():
                     text = gr.Text(label="Describe your music", lines=2, interactive=True)
-                    melody = gr.Audio(source="upload", type="numpy", label="Condition on a melody (optional)", interactive=True)
+                    with gr.Column():
+                        radio = gr.Radio(["file", "mic"], value="file", label="Condition on a melody (optional) File or Mic")
+                        melody = gr.Audio(source="upload", type="numpy", label="File", interactive=True, elem_id="melody-input")
                 with gr.Row():
                     submit = gr.Button("Generate")
             with gr.Column():
                 output = gr.Video(label="Generated Music")
         submit.click(predict_batched, inputs=[text, melody], outputs=[output], batch=True, max_batch_size=MAX_BATCH_SIZE)
+        radio.change(toggle_audio_src, radio, [melody], queue=False, show_progress=False)
         gr.Examples(
             fn=predict_batched,
             examples=[
