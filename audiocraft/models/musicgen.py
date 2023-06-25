@@ -108,7 +108,9 @@ class MusicGen:
                               top_p: float = 0.0, temperature: float = 1.0,
                               duration: float = 30.0, cfg_coef: float = 3.0,
                               two_step_cfg: bool = False, extend_stride: float = 18,
-                              re_prompt_rate: float = 1, batch_size: int = 4):
+                              re_prompt_rate: float = 1, batch_size: int = 4,
+                              interleaved_prompt_period: float = 1, interleaved_gen_period: float = 1,
+                              interleaved_extra_prompt: float = 1):
         """Set the generation parameters for MusicGen.
 
         Args:
@@ -130,6 +132,9 @@ class MusicGen:
         self.duration = duration
         self.re_prompt_rate = re_prompt_rate
         self.batch_size = batch_size
+        self.interleaved_prompt_period = interleaved_prompt_period
+        self.interleaved_gen_period = interleaved_gen_period
+        self.interleaved_extra_prompt = interleaved_extra_prompt
         self.generation_params = {
             'use_sampling': use_sampling,
             'temp': temperature,
@@ -380,6 +385,44 @@ class MusicGen:
         print(tokens.shape)
         self.duration = old_duration
         return tokens
+
+    def generate_continuation_interleaved(self, prompt: torch.Tensor, prompt_sample_rate: int,
+                              descriptions: tp.Optional[tp.List[tp.Optional[str]]] = None,
+                              progress: bool = False) -> torch.Tensor:
+        """Generate samples conditioned on audio prompts. interleaving between prompt and generation
+
+        Args:
+            prompt (torch.Tensor): A batch of waveforms used for continuation.
+                Prompt should be [B, C, T], or [C, T] if only one sample is generated.
+            prompt_sample_rate (int): Sampling rate of the given audio waveforms.
+            descriptions (tp.List[str], optional): A list of strings used as text conditioning. Defaults to None.
+            progress (bool, optional): Flag to display progress of the generation process. Defaults to False.
+        """
+        if prompt.dim() == 2:
+            prompt = prompt[None]
+        if prompt.dim() != 3:
+            raise ValueError("prompt should have 3 dimensions: [B, C, T] (C = 1).")
+        prompt = convert_audio(prompt, prompt_sample_rate, self.sample_rate, self.audio_channels)
+        if descriptions is None:
+            descriptions = [None] * len(prompt)
+        prompt_length = prompt.shape[2]
+
+        old_duration = self.duration
+        self.duration = self.interleaved_gen_period
+
+        step_size = int((self.interleaved_prompt_period + self.interleaved_gen_period) * self.sample_rate)
+        prime_samples = int(self.interleaved_extra_prompt * self.sample_rate)
+        prompt_samples = int(self.interleaved_prompt_period * self.sample_rate)
+
+        new_prompt = prompt[:,:,:prime_samples]
+
+        for i in range(prime_samples, prompt_length, step_size):
+            new_prompt = torch.cat((new_prompt, prompt[:,:,i:i + prompt_samples]), dim=-1)
+            attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, new_prompt)
+            assert prompt_tokens is not None
+            new_prompt = self._generate_tokens(attributes, prompt_tokens, progress)
+
+        return new_prompt
 
     @torch.no_grad()
     def _prepare_tokens_and_attributes(
