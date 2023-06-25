@@ -247,8 +247,8 @@ def ui_full(launch_kwargs):
 
         submit.click(predict_full, inputs=[model, text, melody, audio, re_prompt, method, random_seed, seed, n_samples, duration, topk, topp, temperature, cfg_coef], outputs=[output])
         
-        mic_radio_melody.change(toggle_audio_src, [mic_radio_melody, "Melody"], [melody], queue=False, show_progress=False)
-        mic_radio_audio.change(toggle_audio_src, [mic_radio_audio, "Audio"], [audio], queue=False, show_progress=False)
+        mic_radio_melody.change(toggle_audio_src, [mic_radio_melody, gr.Text(value="Melody", visible=False, interactive=False)], [melody], queue=False, show_progress=False)
+        mic_radio_audio.change(toggle_audio_src, [mic_radio_audio, gr.Text(value="Audio", visible=False, interactive=False)], [audio], queue=False, show_progress=False)
 
         gr.Examples(
             fn=predict_full,
