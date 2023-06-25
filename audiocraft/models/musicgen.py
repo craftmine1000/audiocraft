@@ -408,7 +408,6 @@ class MusicGen:
         prompt_length = prompt.shape[2]
 
         old_duration = self.duration
-        self.duration = self.interleaved_gen_period
 
         step_size = int((self.interleaved_prompt_period + self.interleaved_gen_period) * self.sample_rate)
         prime_samples = int(self.interleaved_extra_prompt * self.sample_rate)
@@ -418,10 +417,13 @@ class MusicGen:
 
         for i in range(prime_samples, prompt_length, step_size):
             new_prompt = torch.cat((new_prompt, prompt[:,:,i:i + prompt_samples]), dim=-1)
+            self.duration = self.interleaved_gen_period + new_prompt.shape[2] / self.sample_rate
+            
             attributes, prompt_tokens = self._prepare_tokens_and_attributes(descriptions, new_prompt)
             assert prompt_tokens is not None
             new_prompt = self._generate_tokens(attributes, prompt_tokens, progress)
 
+        self.duration = old_duration
         return new_prompt
 
     @torch.no_grad()
